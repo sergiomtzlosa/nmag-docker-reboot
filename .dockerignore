@@ -1,0 +1,6 @@
+.git
+.gitignore
+*.h5
+*.log
+*.ndt
+*.vtk

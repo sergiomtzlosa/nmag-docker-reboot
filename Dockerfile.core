@@ -1,0 +1,104 @@
+# Dockerfile for Nmag core (small tarball: nmag-core)
+# Based on Ubuntu 11.10 / 12.04 system dependencies as described in:
+# https://nmag-project.github.io/0.2/install/install_b.html
+
+FROM ubuntu:12.04
+
+LABEL maintainer="Nmag Docker Project"
+LABEL description="Nmag core build with system packages and sundials"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NMAG_CORE_VERSION=0.2.1
+
+# 1. Update repositories to old-releases.ubuntu.com and install system dependencies
+RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releases.ubuntu.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python \
+        python-dev \
+        wget \
+        ca-certificates \
+        build-essential \
+        g++ \
+        gcc \
+        make \
+        m4 \
+        gawk \
+        zlib1g-dev \
+        libreadline-dev \
+        readline-common \
+        libpetsc3.1-dev \
+        libpetsc3.1 \
+        libfindlib-ocaml-dev \
+        ocaml-nox \
+        libqhull-dev \
+        python-tables \
+        python-ply \
+        libparmetis-dev \
+        python-py \
+        python-pyvtk \
+        python-numpy \
+        python-gsl \
+        libgsl0-dev \
+        mpich2 \
+        patch \
+        nano && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. Build Sundials 2.3.0 from source (required by nmag core)
+RUN mkdir -p /tmp/build-sundials && \
+    cd /tmp/build-sundials && \
+    wget --no-check-certificate https://github.com/fangohr/nmag-releases/raw/master/0.2/all/nmag-0.2.1.tar.gz -O /tmp/nmag-all.tar.gz && \
+    tar -xzf /tmp/nmag-all.tar.gz --wildcards "*/pkg/sundials-2.3.0.tar.gz" -O > sundials-2.3.0.tar.gz && \
+    rm /tmp/nmag-all.tar.gz && \
+    tar -xzvf sundials-2.3.0.tar.gz && \
+    cd sundials-2.3.0 && \
+    ./configure --prefix=/usr/local --enable-shared && \
+    make && \
+    make install && \
+    rm -rf /tmp/build-sundials && \
+    ldconfig
+
+# 3. Create unprivileged nmag user
+RUN useradd -m -s /bin/bash -u 1000 nmag
+
+# 4. Download and unpack nmag-core
+WORKDIR /home/nmag
+RUN wget --no-check-certificate https://github.com/fangohr/nmag-releases/raw/master/0.2/core/nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
+    tar -xzvf nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
+    rm nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
+    chown -R nmag:nmag /home/nmag/nmag-core-${NMAG_CORE_VERSION}
+
+# 5. Configure and build nmag core
+RUN su - nmag -c "cd /home/nmag/nmag-core-${NMAG_CORE_VERSION} && python configure.py && make && make install"
+
+# 6. Expose binaries
+RUN ln -sf /home/nmag/nmag-core-${NMAG_CORE_VERSION}/bin/* /usr/bin/ && \
+    ln -sf /home/nmag/nmag-core-${NMAG_CORE_VERSION}/bin/* /usr/local/bin/
+
+# 7. Configure MPD secret files for MPICH2 (/etc/mpd.conf and user configs)
+RUN echo "MPD_SECRETWORD=nmag_secret_pass" > /etc/mpd.conf && \
+    chown root:root /etc/mpd.conf && \
+    chmod 600 /etc/mpd.conf && \
+    echo "MPD_SECRETWORD=nmag_secret_pass" > /home/nmag/.mpd.conf && \
+    chown nmag:nmag /home/nmag/.mpd.conf && \
+    chmod 600 /home/nmag/.mpd.conf && \
+    cp /etc/mpd.conf /root/.mpd.conf && \
+    chmod 600 /root/.mpd.conf
+
+# 8. Setup /io directory for user bind mounts
+RUN mkdir -p /io && chown -R 1000:1000 /io
+
+COPY entrypoint.sh /home/nmag/entrypoint.sh
+RUN chmod +x /home/nmag/entrypoint.sh
+
+USER nmag
+WORKDIR /io
+
+ENV USER=nmag \
+    HOME=/home/nmag \
+    PATH=/home/nmag/nmag-core-0.2.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    LD_LIBRARY_PATH=/usr/local/lib:/usr/lib
+
+ENTRYPOINT ["/home/nmag/entrypoint.sh"]
+CMD ["/bin/bash"]

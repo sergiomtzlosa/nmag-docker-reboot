@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  nmag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nmag:latest
+    container_name: nmag-solver
+    volumes:
+      # Mount current directory to /io in container
+      - .:/io
+    working_dir: /io
+    stdin_open: true
+    tty: true
+    command: /bin/bash
