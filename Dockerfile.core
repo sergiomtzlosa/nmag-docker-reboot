@@ -34,15 +34,15 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         libqhull-dev \
         python-tables \
         python-ply \
-        libparmetis-dev \
+        libscotchparmetis-dev \
         python-py \
         python-pyvtk \
         python-numpy \
-        python-gsl \
         libgsl0-dev \
         mpich2 \
         patch \
         nano && \
+    (test -f /usr/include/parmetis.h || ln -sf /usr/include/parmetis/parmetis.h /usr/include/parmetis.h 2>/dev/null || true) && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Build Sundials 2.3.0 from source (required by nmag core)
