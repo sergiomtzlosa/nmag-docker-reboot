@@ -44,6 +44,7 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         libgsl0-dev \
         mpich2 \
         libmpich2-dev \
+        libx11-dev \
         patch \
         file \
         dpkg-dev \
