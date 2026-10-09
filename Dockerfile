@@ -31,6 +31,8 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         zlib1g-dev \
         libblas-dev \
         liblapack-dev \
+        libatlas-dev \
+        libatlas-base-dev \
         libreadline-dev \
         readline-common \
         libx11-dev \
