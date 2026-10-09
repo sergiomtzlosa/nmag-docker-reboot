@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Docker
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Nmag simulation outputs
+*.h5
+*.vtk
+*.vtu
+*.ndt
+*.dat
+*_dat.npy
+*_dat.h5
+*.ovf
+*.omf
+
+# Example/test outputs (keep source files, ignore outputs)
+example/*.h5
+example/*.vtk
+example/*.ndt
+example/*.dat
+example/*_dat.*
+example/*.log
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+tmp/
+temp/

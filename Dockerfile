@@ -24,6 +24,7 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         dpkg-dev \
         g++ \
         gcc \
+        gfortran \
         make \
         m4 \
         gawk \
