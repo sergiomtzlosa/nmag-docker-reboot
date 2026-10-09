@@ -21,6 +21,7 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         build-essential \
         g++ \
         gcc \
+        gfortran \
         make \
         m4 \
         gawk \
@@ -29,31 +30,46 @@ RUN sed -i -re 's/([a-z]{2}\.)?security.ubuntu.com|archive.ubuntu.com/old-releas
         readline-common \
         libpetsc3.1-dev \
         libpetsc3.1 \
+        ocaml-findlib \
         libfindlib-ocaml-dev \
         ocaml-nox \
         libqhull-dev \
         python-tables \
         python-ply \
         libscotchparmetis-dev \
+        libscotchmetis-dev \
         python-py \
         python-pyvtk \
         python-numpy \
         libgsl0-dev \
         mpich2 \
+        libmpich2-dev \
         patch \
+        file \
+        dpkg-dev \
         nano && \
     (test -f /usr/include/parmetis.h || ln -sf /usr/include/parmetis/parmetis.h /usr/include/parmetis.h 2>/dev/null || true) && \
+    (test -f /usr/include/metis.h || ln -sf /usr/include/metis/metis.h /usr/include/metis.h 2>/dev/null || true) && \
+    (test -f /usr/include/parmetis/parmetis.h && (grep -q "idxtype" /usr/include/parmetis/parmetis.h 2>/dev/null || sed -i '1s/^/#ifndef idxtype\ntypedef int idxtype;\n#define idxtype idxtype\n#endif\n#include <metis.h>\n/' /usr/include/parmetis/parmetis.h 2>/dev/null || true) || true) && \
+    (test -f /usr/include/parmetis.h && (grep -q "idxtype" /usr/include/parmetis.h 2>/dev/null || sed -i '1s/^/#ifndef idxtype\ntypedef int idxtype;\n#define idxtype idxtype\n#endif\n#include <metis.h>\n/' /usr/include/parmetis.h 2>/dev/null || true) || true) && \
+    (test -f /usr/lib/libmetis.so || ln -sf /usr/lib/libscotchmetis.so /usr/lib/libmetis.so 2>/dev/null || true) && \
+    (test -f /usr/lib/libparmetis.so || ln -sf /usr/lib/libptscotchparmetis.so /usr/lib/libparmetis.so 2>/dev/null || true) && \
+    (test -f /usr/lib/libpmpich.so || ln -sf /usr/lib/libmpich.so /usr/lib/libpmpich.so 2>/dev/null || true) && \
+    (test -f /usr/lib/libpmpich.a || ln -sf /usr/lib/libmpich.a /usr/lib/libpmpich.a 2>/dev/null || true) && \
+    ldconfig && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Build Sundials 2.3.0 from source (required by nmag core)
 RUN mkdir -p /tmp/build-sundials && \
     cd /tmp/build-sundials && \
     wget --no-check-certificate https://github.com/fangohr/nmag-releases/raw/master/0.2/all/nmag-0.2.1.tar.gz -O /tmp/nmag-all.tar.gz && \
-    tar -xzf /tmp/nmag-all.tar.gz --wildcards "*/pkg/sundials-2.3.0.tar.gz" -O > sundials-2.3.0.tar.gz && \
-    rm /tmp/nmag-all.tar.gz && \
+    (tar -xzf /tmp/nmag-all.tar.gz --wildcards --wildcards-match-slash "*pkgs/sundials-2.3.0.tar.gz" -O > sundials-2.3.0.tar.gz || \
+     tar -xzf /tmp/nmag-all.tar.gz --wildcards "*/pkgs/sundials-2.3.0.tar.gz" -O > sundials-2.3.0.tar.gz) && \
+    test -s sundials-2.3.0.tar.gz && \
+    rm -f /tmp/nmag-all.tar.gz && \
     tar -xzvf sundials-2.3.0.tar.gz && \
     cd sundials-2.3.0 && \
-    ./configure --prefix=/usr/local --enable-shared && \
+    F77=gfortran ./configure --prefix=/usr/local --enable-shared && \
     make && \
     make install && \
     rm -rf /tmp/build-sundials && \
@@ -67,10 +83,23 @@ WORKDIR /home/nmag
 RUN wget --no-check-certificate https://github.com/fangohr/nmag-releases/raw/master/0.2/core/nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
     tar -xzvf nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
     rm nmag-core-${NMAG_CORE_VERSION}.tar.gz && \
+    python -c "path='/home/nmag/nmag-core-${NMAG_CORE_VERSION}/src/petsc_stubs.c'; data=open(path).read(); open(path,'w').write(data.replace('#include <parmetis.h>', '#include <metis.h>\n#include <parmetis.h>\n#ifndef idxtype\ntypedef int idxtype;\n#define idxtype idxtype\n#endif\n'))" && \
     chown -R nmag:nmag /home/nmag/nmag-core-${NMAG_CORE_VERSION}
 
 # 5. Configure and build nmag core
-RUN su - nmag -c "cd /home/nmag/nmag-core-${NMAG_CORE_VERSION} && python configure.py && make && make install"
+# Set MPI environment variables to allow running in Docker build environment
+ENV OMPI_MCA_orte_tmpdir_base=/tmp \
+    OMPI_ALLOW_RUN_AS_ROOT=1 \
+    OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
+    OMPI_MCA_btl_vader_single_copy_mechanism=none \
+    OMPI_MCA_plm_rsh_agent=sh
+
+RUN su - nmag -c "export OMPI_MCA_orte_tmpdir_base=/tmp && \
+    export OMPI_ALLOW_RUN_AS_ROOT=1 && \
+    export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 && \
+    export OMPI_MCA_btl_vader_single_copy_mechanism=none && \
+    export OMPI_MCA_plm_rsh_agent=sh && \
+    cd /home/nmag/nmag-core-${NMAG_CORE_VERSION} && python configure.py && make && make install"
 
 # 6. Expose binaries
 RUN ln -sf /home/nmag/nmag-core-${NMAG_CORE_VERSION}/bin/* /usr/bin/ && \
@@ -97,7 +126,7 @@ WORKDIR /io
 
 ENV USER=nmag \
     HOME=/home/nmag \
-    PATH=/home/nmag/nmag-core-0.2.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PATH=/home/nmag/nmag-core-${NMAG_CORE_VERSION}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     LD_LIBRARY_PATH=/usr/local/lib:/usr/lib
 
 ENTRYPOINT ["/home/nmag/entrypoint.sh"]

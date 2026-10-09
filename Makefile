@@ -1,4 +1,4 @@
-.PHONY: help build build-core build-fg build-core-fg run nsim test multicore sphere1 compose-up attach attach-core logs logs-core screen-status clean clean-containers clean-images clean-all prune
+.PHONY: help build build-core build-fg build-core-fg run nsim test multicore sphere1 compose-up attach attach-core logs logs-core screen-status clean clean-containers clean-images clean-all prune prune-core run-core nsim-core test-core multicore-core sphere1-core
 
 IMAGE_NAME ?= nmag
 IMAGE_TAG ?= 0.2.1
@@ -19,15 +19,21 @@ help:
 	@echo "  make logs-core        - Tail the live core build log (build-core.log)"
 	@echo "  make screen-status    - List active screen sessions"
 	@echo "  make run              - Open an interactive bash shell in the container"
+	@echo "  make run-core         - Open an interactive bash shell in the core container"
 	@echo "  make nsim             - Launch the interactive nsim / Python shell"
+	@echo "  make nsim-core        - Launch nsim / Python shell in core container"
 	@echo "  make test             - Run the test script (example/test_nmag.py)"
+	@echo "  make test-core        - Run the test script in core container"
 	@echo "  make multicore        - Run parallel simulation on multiple cores (default: CORES=2)"
+	@echo "  make multicore-core   - Run parallel simulation in core container (default: CORES=2)"
 	@echo "  make sphere1          - Run sphere1 simulation"
+	@echo "  make sphere1-core     - Run sphere1 simulation in core container"
 	@echo "  make compose-up       - Build and start using docker-compose"
 	@echo "  make clean            - Remove simulation output and build log files"
 	@echo "  make clean-containers - Stop and remove all Nmag containers"
 	@echo "  make clean-images     - Remove Nmag Docker images"
 	@echo "  make clean-all        - Delete simulation outputs, containers, and Docker images"
+	@echo "  make prune-core       - Remove only nmag:core containers and image"
 
 # Build inside a detached screen session (resilient against network drops)
 build:
@@ -83,17 +89,32 @@ screen-status:
 run:
 	docker run --rm -it -v "$$(pwd):/io" $(IMAGE_NAME):latest
 
+run-core:
+	docker run --rm -it -v "$$(pwd):/io" $(IMAGE_NAME):core
+
 nsim:
 	docker run --rm -it -v "$$(pwd):/io" $(IMAGE_NAME):latest nsim
+
+nsim-core:
+	docker run --rm -it -v "$$(pwd):/io" $(IMAGE_NAME):core nsim
 
 test:
 	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):latest nsim example/test_nmag.py
 
+test-core:
+	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):core nsim example/test_nmag.py
+
 multicore:
-	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):latest mpiexec -n $(CORES) nsim example/multicore_simulation.py
+	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):latest mpiexec -n $(CORES) nsim example/multicore_simulation.py --clean
+
+multicore-core:
+	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):core mpiexec -n $(CORES) nsim example/multicore_simulation.py --clean
 
 sphere1:
-	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):latest mpiexec -n $(CORES) nsim example/sphere1.py
+	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):latest mpiexec -n $(CORES) nsim example/sphere1.py --clean
+
+sphere1-core:
+	docker run --rm -v "$$(pwd):/io" $(IMAGE_NAME):core mpiexec -n $(CORES) nsim example/sphere1.py --clean
 
 compose-up:
 	docker compose run --rm nmag
@@ -120,3 +141,10 @@ clean-all: clean clean-containers clean-images
 	@echo "Cleanup complete: simulation outputs, containers, and images have been removed."
 
 prune: clean-all
+
+# Prune only nmag:core containers and image
+prune-core:
+	@echo "Removing nmag:core containers and image..."
+	-docker ps -a -q --filter "ancestor=$(IMAGE_NAME):core" | xargs -r docker rm -f 2>/dev/null || true
+	-docker rmi -f $(IMAGE_NAME):core 2>/dev/null || true
+	@echo "nmag:core cleanup complete."
